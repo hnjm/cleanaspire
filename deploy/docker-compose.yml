@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   apiservice:
-    image: blazordevlab/cleanaspire-api:0.0.85
+    image: blazordevlab/cleanaspire-api:0.0.88
     environment:
       - ASPNETCORE_ENVIRONMENT=${APISERVICE_ASPNETCORE_ENVIRONMENT}
       - AllowedHosts=${APISERVICE_AllowedHosts}
@@ -27,7 +27,7 @@ services:
       - "8037:80"
       - "8036:443"
   blazorweb:
-    image: blazordevlab/cleanaspire-webapp:0.0.85
+    image: blazordevlab/cleanaspire-webapp:0.0.88
     environment:
       - ASPNETCORE_ENVIRONMENT=${BLAZORWEB_ASPNETCORE_ENVIRONMENT}
       - AllowedHosts=${BLAZORWEB_AllowedHosts}
@@ -38,7 +38,7 @@ services:
       - "8035:80"
       - "8034:443"
   standalone:
-    image: blazordevlab/cleanaspire-standalone:0.0.85
+    image: blazordevlab/cleanaspire-standalone:0.0.88
     ports:
       - "8032:80"
       - "8031:443"

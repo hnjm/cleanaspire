@@ -102,21 +102,25 @@ public static class DependencyInjection
         {
             case DbProviderKeys.Npgsql:
                 AppContext.SetSwitch(NPGSQL_ENABLE_LEGACY_TIMESTAMP_BEHAVIOR, true);
-                return builder.UseNpgsql(connectionString,
+                builder.UseNpgsql(connectionString,
                         e => e.MigrationsAssembly(POSTGRESQL_MIGRATIONS_ASSEMBLY))
                     .UseSnakeCaseNamingConvention();
-
+                break;
             case DbProviderKeys.SqlServer:
-                return builder.UseSqlServer(connectionString,
+                builder.UseSqlServer(connectionString,
                     e => e.MigrationsAssembly(MSSQL_MIGRATIONS_ASSEMBLY));
-
+                break;
             case DbProviderKeys.SqLite:
-                return builder.UseSqlite(connectionString,
+                builder.UseSqlite(connectionString,
                     e => e.MigrationsAssembly(SQLITE_MIGRATIONS_ASSEMBLY));
-
+                break;
             default:
                 throw new InvalidOperationException($"DB Provider {dbProvider} is not supported.");
         }
+        // Ignore the “PendingModelChangesWarning” so that add-migration can succeed
+        builder.ConfigureWarnings(w =>
+        w.Ignore(RelationalEventId.PendingModelChangesWarning));
+        return builder;
     }
     private static DbContextOptionsBuilder UseExceptionProcessor(this DbContextOptionsBuilder builder, string dbProvider)
     {

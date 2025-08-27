@@ -368,3 +368,5 @@ src/CleanAspire.Api/appsettings.Development.json
 src/CleanAspire.Api/files/
 src/CleanAspire.Api/CleanAspire.Api.json
 src/CleanAspire.Api/pushsubscription.sqlitedb
+
+.env

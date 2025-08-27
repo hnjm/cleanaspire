@@ -159,5 +159,34 @@ public class CookieAuthenticationStateProvider(ApiClient apiClient, UserProfileS
             throw;
         }
     }
+
+    public async Task LoginWithMicrosoft(string authorizationCode, string state, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await apiClient.Account.Microsoft.SignIn.PostAsync(q =>
+            {
+                q.QueryParameters.Code = authorizationCode;
+                q.QueryParameters.State = state;
+            }, cancellationToken);
+            NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+
+        }
+        catch (ProblemDetails)
+        {
+
+            throw;
+        }
+        catch (ApiException)
+        {
+
+            throw;
+        }
+        catch (Exception)
+        {
+
+            throw;
+        }
+    }
 }
 

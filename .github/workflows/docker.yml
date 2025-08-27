@@ -49,19 +49,4 @@ jobs:
           docker build -t ${{ secrets.DOCKER_USERNAME }}/cleanaspire-api:${{ steps.version.outputs.version }} -f src/CleanAspire.Api/Dockerfile .
           docker push ${{ secrets.DOCKER_USERNAME }}/cleanaspire-api:${{ steps.version.outputs.version }}
 
-      - name: Update version in docker-compose file
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "Updating docker-compose file with version ${{ steps.version.outputs.version }}"
-          sed -i 's#blazordevlab/cleanaspire-api:[0-9a-zA-Z\.\-]*#blazordevlab/cleanaspire-api:${{ steps.version.outputs.version }}#' deploy/docker-compose.yml
-          sed -i 's#blazordevlab/cleanaspire-webapp:[0-9a-zA-Z\.\-]*#blazordevlab/cleanaspire-webapp:${{ steps.version.outputs.version }}#' deploy/docker-compose.yml
-          sed -i 's#blazordevlab/cleanaspire-standalone:[0-9a-zA-Z\.\-]*#blazordevlab/cleanaspire-standalone:${{ steps.version.outputs.version }}#' deploy/docker-compose.yml
-
-      - name: Create Pull Request
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: peter-evans/create-pull-request@v4
-        with:
-          commit-message: "Update Docker Compose files to version ${{ steps.version.outputs.version }}"
-          title: "Update Docker Compose to version ${{ steps.version.outputs.version }}"
-          body: "Automatically updating Docker Compose version references to match the latest build version ${{ steps.version.outputs.version }}"
-          branch: update-compose-version-${{ steps.version.outputs.version }}
+    

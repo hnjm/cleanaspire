@@ -1,26 +1,27 @@
 ﻿
-using MudBlazor.Services;
-using MudBlazor;
+using System.Globalization;
 using Blazored.LocalStorage;
-using CleanAspire.ClientApp.Services.Interfaces;
-using CleanAspire.ClientApp.Services.UserPreferences;
-using CleanAspire.ClientApp.Services;
-using CleanAspire.ClientApp.Configurations;
-using CleanAspire.ClientApp.Services.Identity;
-using CleanAspire.ClientApp.Services.JsInterop;
 using CleanAspire.Api.Client;
+using CleanAspire.ClientApp.Configurations;
+using CleanAspire.ClientApp.Services;
+using CleanAspire.ClientApp.Services.Identity;
+using CleanAspire.ClientApp.Services.Interfaces;
+using CleanAspire.ClientApp.Services.JsInterop;
+using CleanAspire.ClientApp.Services.Products;
+using CleanAspire.ClientApp.Services.PushNotifications;
+using CleanAspire.ClientApp.Services.UserPreferences;
 using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.Kiota.Abstractions.Authentication;
+using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Kiota.Abstractions;
+using Microsoft.Kiota.Abstractions.Authentication;
 using Microsoft.Kiota.Http.HttpClientLibrary;
 using Microsoft.Kiota.Serialization.Form;
 using Microsoft.Kiota.Serialization.Json;
 using Microsoft.Kiota.Serialization.Multipart;
 using Microsoft.Kiota.Serialization.Text;
-using CleanAspire.ClientApp.Services.PushNotifications;
-using CleanAspire.ClientApp.Services.Products;
-using System.Globalization;
-using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using MudBlazor;
+using MudBlazor.Services;
+
 
 namespace CleanAspire.ClientApp;
 
@@ -78,6 +79,7 @@ public static class DependencyInjection
 
         // MudBlazor Integration
         services.TryAddMudBlazor(configuration);
+
     }
 
     public static void AddHttpClients(this IServiceCollection services, IConfiguration configuration)

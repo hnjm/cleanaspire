@@ -2,21 +2,22 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using Microsoft.AspNetCore.Http.HttpResults;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Identity;
-using CleanAspire.Domain.Identities;
-using System.ComponentModel.DataAnnotations;
 using System.ComponentModel;
-using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
-using Microsoft.AspNetCore.WebUtilities;
-using System.Text.Encodings.Web;
-using System.Text;
-using Microsoft.AspNetCore.Identity.Data;
-using Google.Apis.Auth;
-using CleanAspire.Infrastructure.Persistence;
 using System.Globalization;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Encodings.Web;
+using CleanAspire.Domain.Identities;
+using CleanAspire.Infrastructure.Persistence;
+using Google.Apis.Auth;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.Data;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 namespace CleanAspire.Api;
 
 public static class IdentityApiAdditionalEndpointsExtensions
@@ -424,6 +425,197 @@ public static class IdentityApiAdditionalEndpointsExtensions
            .WithSummary("External Login with Google OAuth")
             .WithDescription("Handles external login using Google OAuth 2.0. Exchanges an authorization code for tokens, validates the user's identity, and signs the user in.");
 
+        routeGroup.MapGet("/microsoft/loginUrl", ([FromQuery] string state, HttpContext context) =>
+        {
+            if (string.IsNullOrEmpty(state))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            { "state", new[] { "The state parameter is required." } }
+        });
+            }
+            var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+            var clientId = configuration["Authentication:Microsoft:ClientId"];
+            if (string.IsNullOrEmpty(clientId))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            { "clientId", new[] { "Microsoft Client ID is not configured." } }
+        });
+            }
+            var tenantId = configuration["Authentication:Microsoft:TenantId"] ?? "common";
+            var baseRedirectUri = configuration["ClientBaseUrl"];
+            var redirectUri = string.IsNullOrEmpty(baseRedirectUri)
+                ? $"{context.Request.Scheme}://{context.Request.Host}/authentication-callback"
+                : $"{baseRedirectUri}/authentication-callback";
+
+            //    if (!redirectUri.StartsWith(state))
+            //    {
+            //        return Results.ValidationProblem(new Dictionary<string, string[]>
+            //{
+            //    { "state", new[] { "The state parameter does not match the redirect URI." } }
+            //});
+            //    }
+            var scopes = "openid profile email User.Read offline_access";
+            var microsoftAuthUrl =
+                $"https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/authorize?" +
+                $"response_type=code&" +
+                $"client_id={Uri.EscapeDataString(clientId)}&" +
+                $"redirect_uri={Uri.EscapeDataString(redirectUri)}&" +
+                $"scope={Uri.EscapeDataString(scopes)}&" +
+                $"state={Uri.EscapeDataString(state)}&" +
+                $"response_mode=query";
+            return Results.Ok(microsoftAuthUrl);
+        })
+      .Produces<string>(StatusCodes.Status200OK)
+      .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
+      .WithSummary("Generate Microsoft Azure OAuth 2.0 Login URL")
+      .WithDescription("Generates a Microsoft Azure OAuth 2.0 authorization URL for external login, dynamically determining the redirect URI and including the provided state parameter.");
+
+
+        routeGroup.MapPost("/microsoft/signIn", async (HttpContext context,
+        [FromServices] IHttpClientFactory httpClientFactory,
+        [FromQuery] string state,
+        [FromQuery] string code) =>
+        {
+            if (string.IsNullOrEmpty(code))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    { "code", new[] { "The authorization code parameter is required." } }
+                });
+            }
+            var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+            var clientId = configuration["Authentication:Microsoft:ClientId"];
+            var clientSecret = configuration["Authentication:Microsoft:ClientSecret"];
+            var tenantId = configuration["Authentication:Microsoft:TenantId"] ?? "common";
+
+            if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    { "clientId", new[] { "Microsoft Client ID or Client Secret is not configured." } }
+                });
+            }
+            var baseRedirectUri = configuration["ClientBaseUrl"];
+            if (string.IsNullOrEmpty(baseRedirectUri))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                { "baseRedirectUri", new[] { "Client base URL is not configured." } }
+            });
+            }
+            var redirectUri = $"{baseRedirectUri}/authentication-callback";
+
+            if (!redirectUri.StartsWith(state))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                { "state", new[] { "The state parameter does not match the redirect URI." } }
+            });
+            }
+
+            // Exchange the authorization code for tokens
+            var tokenRequestContent = new FormUrlEncodedContent
+            ([
+                new KeyValuePair<string, string>("code", code),
+                new KeyValuePair<string, string>("client_id", clientId),
+                new KeyValuePair<string, string>("client_secret", clientSecret),
+                new KeyValuePair<string, string>("redirect_uri", redirectUri),
+                new KeyValuePair<string, string>("grant_type", "authorization_code")
+            ]);
+
+            var tokenResponse = await httpClientFactory.CreateClient().PostAsync(
+                $"https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token", tokenRequestContent);
+
+            if (!tokenResponse.IsSuccessStatusCode)
+            {
+                var responseMessage = await tokenResponse.Content.ReadAsStringAsync();
+                return Results.BadRequest($"Authorization code exchange failed. {responseMessage}");
+            }
+
+            var tokenContent = await tokenResponse.Content.ReadFromJsonAsync<MicrosoftTokenResponse>();
+            if (tokenContent?.access_token is null)
+            {
+                return Results.BadRequest("access_token not found in the response from the identity provider");
+            }
+
+            try
+            {
+                var handler = new JwtSecurityTokenHandler();
+                var principal = handler.ReadJwtToken(tokenContent.access_token);
+                var email = principal.Claims.FirstOrDefault(c => c.Type == "email")?.Value;
+                if (string.IsNullOrEmpty(email))
+                {
+                    return Results.BadRequest("Email not found in the token claims.");
+                }
+                var oid = principal.Claims.FirstOrDefault(c => c.Type == "oid")?.Value ?? tokenContent.id_token;
+                var given_name = principal.Claims.FirstOrDefault(c => c.Type == "given_name")?.Value;
+                var userManager = context.RequestServices.GetRequiredService<UserManager<TUser>>();
+                var dbcontext = context.RequestServices.GetRequiredService<ApplicationDbContext>();
+                var signInManager = context.RequestServices.GetRequiredService<SignInManager<TUser>>();
+
+                var user = await userManager.FindByEmailAsync(email);
+                
+                // If user is still null, create using UserManager
+                if (user == null)
+                {
+                    user = new TUser();
+                    if (!userManager.SupportsUserEmail)
+                    {
+                        throw new NotSupportedException("Email support required.");
+                    }
+
+                    if (user is not ApplicationUser appUser)
+                    {
+                        throw new InvalidCastException("Expected user to be ApplicationUser.");
+                    }
+
+                    var microsofttenantId = dbcontext.Tenants.FirstOrDefault()?.Id;
+                    appUser.TenantId = microsofttenantId;
+                    appUser.Email = email;
+                    appUser.UserName = email;
+                    appUser.Nickname = given_name;
+                    appUser.Provider = "Microsoft";
+                    appUser.AvatarUrl = "";
+                    appUser.LanguageCode = "en-US";
+                    appUser.TimeZoneId = TimeZoneInfo.Local.Id;
+                    appUser.EmailConfirmed = true;
+                    appUser.RefreshToken = tokenContent.refresh_token;
+                    appUser.RefreshTokenExpiryTime = DateTime.UtcNow.AddSeconds(tokenContent.expires_in);
+
+                    var createResult = await userManager.CreateAsync(user);
+                    if (!createResult.Succeeded)
+                    {
+                        return Results.BadRequest("Failed to create a new user.");
+                    }
+                    await userManager.AddLoginAsync(user, new UserLoginInfo("Microsoft", oid, "Microsoft"));
+                }
+                else
+                {
+                    var userId= await userManager.GetUserIdAsync(user);
+                    await userManager.AddLoginAsync(user, new UserLoginInfo("Microsoft", oid, "Microsoft"));
+                }
+
+                signInManager.AuthenticationScheme = IdentityConstants.ApplicationScheme;
+                var loginResult = await signInManager.ExternalLoginSignInAsync("Microsoft", oid, isPersistent: true);
+                if (!loginResult.Succeeded)
+                {
+                    return Results.BadRequest("External login failed.");
+                }
+
+                return TypedResults.Ok();
+            }
+            catch (Exception e)
+            {
+                return Results.BadRequest($"Authentication failed. {e.Message}");
+            }
+
+        }).Produces(StatusCodes.Status200OK)
+    .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
+    .ProducesProblem(StatusCodes.Status400BadRequest)
+    .WithSummary("External Login with Microsoft Azure OAuth")
+    .WithDescription("Handles external login using Microsoft Azure OAuth 2.0. Exchanges an authorization code for tokens, validates the user's identity, and signs the user in.");
 
         routeGroup.MapGet("/generateAuthenticator", async Task<Results<Ok<AuthenticatorResponse>, ValidationProblem, NotFound>>
             (ClaimsPrincipal claimsPrincipal, HttpContext context, [FromQuery] string appName) =>
@@ -656,6 +848,8 @@ public static class IdentityApiAdditionalEndpointsExtensions
           .WithSummary("Request a password reset link")
           .WithDescription("Generates and sends a password reset link to the user's email if the email is registered and confirmed.");
         return endpoints;
+
+       
 
     }
     private static async Task<ProfileResponse> CreateInfoResponseAsync<TUser>(TUser user, UserManager<TUser> userManager)
@@ -950,6 +1144,31 @@ internal sealed record GoogleAuthResponse(
     string Email,
     string? ProfilePicture
 );
+
+
+
+internal sealed record MicrosoftTokenResponse
+{
+    public string? access_token { get; set; }
+    public string? token_type { get; set; }
+    public string? refresh_token { get; set; }
+    public int expires_in { get; set; }
+    public string? id_token { get; set; }
+    public string? scope { get; set; }
+}
+
+
+internal sealed record MicrosoftUserInfo
+{
+    public string? id { get; set; }
+    public string? displayName { get; set; }
+    public string? givenName { get; set; }
+    public string? surname { get; set; }
+    public string? mail { get; set; }
+    public string? userPrincipalName { get; set; }
+    public string? jobTitle { get; set; }
+    public string? officeLocation { get; set; }
+}
 
 internal sealed record AuthenticatorResponse(
     string SharedKey,

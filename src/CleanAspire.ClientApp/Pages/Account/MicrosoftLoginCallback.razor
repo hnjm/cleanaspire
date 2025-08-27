@@ -1,0 +1,78 @@
+﻿@page "/authentication-callback"
+
+
+@inject ISignInManagement SignInManagement
+
+<PageTitle>@L["external login"]</PageTitle>
+<MudPaper Elevation="3" Class="pa-8" Width="100%" MaxWidth="500px">
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <MudAlert Severity="Severity.Error">@Error</MudAlert>
+    }
+    else
+    {
+        <div class="d-flex flex-row align-center justify-center gap-2">
+            <MudIcon>
+                <svg width="24" height="24" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" transform="matrix(-1.8369701987210297e-16,-1,1,-1.8369701987210297e-16,0,0)">
+                    <circle cx="50" cy="20" r="7" fill="#3498db">
+                        <animateTransform attributeType="XML" attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="1.5s" repeatCount="indefinite"></animateTransform>
+                    </circle>
+                    <circle cx="80" cy="50" r="7" fill="#e74c3c">
+                        <animateTransform attributeType="XML" attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="1.5s" begin="0.2s" repeatCount="indefinite"></animateTransform>
+                    </circle>
+                    <circle cx="50" cy="80" r="7" fill="#f1c40f">
+                        <animateTransform attributeType="XML" attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="1.5s" begin="0.4s" repeatCount="indefinite"></animateTransform>
+                    </circle>
+                    <circle cx="20" cy="50" r="7" fill="#2ecc71">
+                        <animateTransform attributeType="XML" attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="1.5s" begin="0.6s" repeatCount="indefinite"></animateTransform>
+                    </circle>
+                </svg>
+            </MudIcon>
+            <MudText Typo="Typo.body2">@L["Authenticating, please wait..."]</MudText>
+        </div>
+    }
+</MudPaper>
+
+@code {
+    // The authorization code sent by Google after successful authentication
+    [SupplyParameterFromQuery(Name = "code")]
+    public string? AuthorizationCode { get; set; }
+
+    // Optional state included in the redirect URI
+    [SupplyParameterFromQuery(Name = "state")]
+    public string? State { get; set; }
+    public string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(AuthorizationCode))
+        {
+            Error = "Missing authorization code. Please ensure you have completed the login process via Google.";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(State))
+        {
+            Error = "Invalid request: Missing state parameter. Please try logging in again.";
+            return;
+        }
+        try
+        {
+            await SignInManagement.LoginWithMicrosoft(AuthorizationCode, State);
+            StateHasChanged();
+        }
+        catch (ProblemDetails ex)
+        {
+            // Log and display API-specific problem details
+            Error = $"An error occurred during login: {ex.Detail ?? "Please contact support if the issue persists."}";
+        }
+        catch (Exception ex)
+        {
+            // Catch-all for other exceptions
+            Error = $"Unexpected error: {ex.Message}. Please refresh the page or contact support.";
+        }
+
+    }
+}
+
+

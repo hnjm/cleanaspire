@@ -24,17 +24,17 @@ public class StockDto
     /// <summary>
     /// Gets or sets the unique identifier for the product.
     /// </summary>
-    public string? ProductId { get; set; }
+    public string ProductId { get; set; }
 
     /// <summary>
     /// Gets or sets the product details.
     /// </summary>
-    public ProductDto? Product { get; set; }
+    public ProductDto Product { get; set; }
 
     /// <summary>
     /// Gets or sets the quantity of the stock.
     /// </summary>
-    public int Quantity { get; set; }
+    public int Quantity { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets the location of the stock.

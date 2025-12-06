@@ -1,20 +1,21 @@
 ﻿using System.Text.Json.Serialization;
 using CleanAspire.Api;
+using CleanAspire.Api.Endpoints;
+using CleanAspire.Api.ExceptionHandlers;
+using CleanAspire.Api.Identity;
+using CleanAspire.Api.Webpushr;
 using CleanAspire.Application;
 using CleanAspire.Application.Common.Services;
 using CleanAspire.Domain.Identities;
 using CleanAspire.Infrastructure;
-using CleanAspire.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Identity;
-using Scalar.AspNetCore;
-using Microsoft.OpenApi;
-using CleanAspire.Api.Identity;
-using Microsoft.Extensions.FileProviders;
-using CleanAspire.Api.Endpoints;
 using CleanAspire.Infrastructure.Configurations;
+using CleanAspire.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http.Features;
-using CleanAspire.Api.ExceptionHandlers;
-using CleanAspire.Api.Webpushr;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.OpenApi;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.OpenApi;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -58,6 +59,7 @@ builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
 {
     options.SignIn.RequireConfirmedEmail = true;
+    options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
 })
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddApiEndpoints();
@@ -81,10 +83,20 @@ builder.Services.Scan(scan => scan
     .As<IEndpointRegistrar>()
     .WithScopedLifetime());
 
+
+
 builder.Services.AddOpenApi(options =>
 {
-    options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_0;
+    options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1;
     options.UseCookieAuthentication();
+    
+    // Add dedicated schema transformers
+    options.AddSchemaTransformer<NumberSchemaTransformer>();
+
+    
+    // Add document transformer for enum deduplication
+
+
 });
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -138,6 +150,9 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = new PathString("/files")
 });
 await app.RunAsync();
+
+
+
 
 
 

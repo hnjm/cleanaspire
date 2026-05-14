@@ -14,8 +14,7 @@ SelectOnRowClick="false"
 RowClick="@(r=>Edit(r.Item))"
 RowStyleFunc="_rowStyleFunc"
 @bind-RowsPerPage="_defaultPageSize"
-@bind-SelectedItems="_selectedItems"
-@bind-SelectedItem="_currentDto">
+@bind-SelectedItems="_selectedItems">
     <ToolBarContent>
         <MudStack Row Spacing="0" Class="flex-grow-1" Justify="Justify.SpaceBetween">
             <MudStack Row AlignItems="AlignItems.Start">
@@ -95,7 +94,7 @@ RowStyleFunc="_rowStyleFunc"
             NumberFormat = "#,#",
             DisplayFormat = "Total amount is {value}"
         };
-    private async Task<GridData<ProductDto>> ServerReload(GridState<ProductDto> state)
+    private async Task<GridData<ProductDto>> ServerReload(GridState<ProductDto> state,CancellationToken cancellationToken)
     {
         try
         {
